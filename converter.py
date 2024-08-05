@@ -50,7 +50,9 @@ def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0,):
             trimesh.repair.fill_holes(mesh)   # Fill holes in the mesh 
  
             # Translate the mesh upwards to sit on top of the base layer
-            #mesh.apply_translation([0, 0, base_thickness - min(elevations)])
+            lowest_z = np.min(mesh.vertices[:, 2])  # Find the lowest Z-coordinate in the building mesh
+            translation_vector = [0, 0, base_thickness - lowest_z]
+            mesh.apply_translation(translation_vector)
 
             building_meshes.append(mesh) # Append to building_meshes
 
@@ -68,14 +70,11 @@ def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0,):
             scale_factor = max_dimension / max_extent
             combined_building_mesh.apply_scale(scale_factor)
 
-        # Center the buildings on the base (considering the base is now at (0,0,0))
-        # BUT ALSO, ensure the LOWEST point of the building mesh is at z=base_thickness
-        
-        building_centroid = combined_building_mesh.centroid
-        lowest_building_point = np.min(combined_building_mesh.vertices[:, 2])  # Find the lowest Z coordinate
-        translation_vector = [0, 0, base_thickness - lowest_building_point] - building_centroid
-
-        combined_building_mesh.apply_translation(translation_vector)
+        # Center the buildings on the base (horizontally only)
+        base_centroid_xy = base_mesh.centroid[:2]  # Get only x and y components of the base centroid
+        building_centroid_xy = combined_building_mesh.centroid[:2]
+        translation_vector_xy = base_centroid_xy - building_centroid_xy 
+        combined_building_mesh.apply_translation([translation_vector_xy[0], translation_vector_xy[1], 0])
 
         # Add the combined building mesh to the final meshes list
         meshes.append(combined_building_mesh) 

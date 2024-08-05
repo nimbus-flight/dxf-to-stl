@@ -4,7 +4,7 @@ import numpy as np
 import shapely.geometry  # Import the shapely.geometry module
 
 
-def dxf_to_extruded_stl(dxf_path, stl_path):
+def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0,):
     """
     Converts a DXF file to an extruded STL mesh for 3D printing.
     """
@@ -13,6 +13,17 @@ def dxf_to_extruded_stl(dxf_path, stl_path):
     msp = doc.modelspace()
 
     meshes = []
+    building_meshes = [] # Separate list for building meshes
+
+
+    # Create a base layer (adjust dimensions and thickness as needed)
+    base_width = 200.0
+    base_length = 200.0
+    base_thickness = 4.0 
+    base_mesh = trimesh.creation.box(extents=[base_width, base_length, base_thickness])
+
+    meshes.append(base_mesh)  # Add the base mesh first
+
     for entity in msp:
         if entity.dxftype() == 'MESH' and entity.dxf.layer == 'buildings':
             # Extract vertices and their elevations from the MESH entity
@@ -28,41 +39,49 @@ def dxf_to_extruded_stl(dxf_path, stl_path):
             # Create a trimesh mesh
             mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
 
-            # Optionally, translate the mesh downwards if the base is not at z=0
-            if min(elevations) != 0:
-                mesh.apply_translation([0, 0, -min(elevations)])
 
-            
+            # Check if the mesh is a valid volume
+            #if not mesh.is_volume:
+            #    print(f"Skipping invalid MESH entity (not a volume): {entity}")
+            #    continue 
+
             # Attempt to repair the combined mesh
             trimesh.repair.fix_winding(mesh)  # Fix winding order if needed
             trimesh.repair.fill_holes(mesh)   # Fill holes in the mesh 
+ 
+            # Translate the mesh upwards to sit on top of the base layer
+            #mesh.apply_translation([0, 0, base_thickness - min(elevations)])
 
-
-            meshes.append(mesh)
+            building_meshes.append(mesh) # Append to building_meshes
 
         else:
             continue  # Ignore other entity types         
-    # Combine all meshes
+ 
+  # Combine building meshes 
+    if building_meshes:  # Check if there are any building meshes
+        combined_building_mesh = trimesh.util.concatenate(building_meshes)
+
+        # Scale down buildings to fit within max_dimension
+        bounds = combined_building_mesh.bounds
+        max_extent = np.max(bounds[1] - bounds[0]) 
+        if max_extent > max_dimension:
+            scale_factor = max_dimension / max_extent
+            combined_building_mesh.apply_scale(scale_factor)
+
+        # Center the buildings on the base (considering the base is now at (0,0,0))
+        # BUT ALSO, ensure the LOWEST point of the building mesh is at z=base_thickness
+        
+        building_centroid = combined_building_mesh.centroid
+        lowest_building_point = np.min(combined_building_mesh.vertices[:, 2])  # Find the lowest Z coordinate
+        translation_vector = [0, 0, base_thickness - lowest_building_point] - building_centroid
+
+        combined_building_mesh.apply_translation(translation_vector)
+
+        # Add the combined building mesh to the final meshes list
+        meshes.append(combined_building_mesh) 
+
+    # Combine all meshes (now including both base and buildings)
     combined_mesh = trimesh.util.concatenate(meshes)
-
-    # Scale down to fit within max_dimension
-    max_dimension = 200.0
-    bounds = combined_mesh.bounds
-    max_extent = np.max(bounds[1] - bounds[0])  # Get the largest dimension
-    if max_extent > max_dimension:
-        scale_factor = max_dimension / max_extent
-        combined_mesh.apply_scale(scale_factor)
-
-
-
-    # Create a base layer (adjust dimensions and thickness as needed)
-    base_width = 200.0
-    base_length = 200.0
-    base_thickness = 4.0 
-    base_mesh = trimesh.creation.box(extents=[base_width, base_length, base_thickness])
-
-    # Union the base layer with the combined mesh
-    #combined_mesh = combined_mesh.union(base_mesh)
 
     # Export to STL
     combined_mesh.export(stl_path)

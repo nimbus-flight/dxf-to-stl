@@ -4,7 +4,7 @@ import numpy as np
 import shapely.geometry  # Import the shapely.geometry module
 
 
-def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0,):
+def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0):
     """
     Converts a DXF file to an extruded STL mesh for 3D printing.
     """
@@ -41,23 +41,41 @@ def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0,):
         else:
             continue  # Ignore other entity types         
  
-  # Combine building meshes 
-    if building_meshes:  # Check if there are any building meshes
-        combined_building_mesh = trimesh.util.concatenate(building_meshes)
+    # Combine building meshes 
+    combined_building_mesh = trimesh.util.concatenate(building_meshes)
 
-        # Scale down buildings to fit within max_dimension
-        bounds = combined_building_mesh.bounds
-        max_extent = np.max(bounds[1] - bounds[0]) 
-        if max_extent > max_dimension:
-            scale_factor = max_dimension / max_extent
-            combined_building_mesh.apply_scale(scale_factor)
+    # Scale down buildings to fit within max_dimension
+    bounds = combined_building_mesh.bounds
+    max_extent = np.max(bounds[1] - bounds[0]) 
+    if max_extent > max_dimension:
+        scale_factor = max_dimension / max_extent
+        combined_building_mesh.apply_scale(scale_factor)
 
-        # Add the combined building mesh to the final meshes list
-        meshes.append(combined_building_mesh) 
+    # Add the combined building mesh to the final meshes list
+    meshes.append(combined_building_mesh) 
+   
+    # Center the combined building mesh (in X and Y only) before creating the base
+    combined_building_mesh.apply_translation(
+        [-combined_building_mesh.centroid[0], -combined_building_mesh.centroid[1], 0]
+    )
 
-    # Combine all meshes (now including both base and buildings)
-    combined_mesh = trimesh.util.concatenate(meshes)
+    # Find the lowest Z value in the combined building mesh
+    lowest_z = combined_building_mesh.bounds[0][2]  # Get Z from lower corner of bounding box
 
+    # Create the base layer mesh (centered at Z=0)
+    base_thickness = 2.0  # Adjust base thickness as needed
+    base_mesh = trimesh.creation.box(
+        extents=[max_dimension*1.2, max_dimension*1.2, base_thickness],
+        center=[0, 0, 0],
+    )
+
+    # Place the combined building mesh on top of the base layer (at Z=0)
+    combined_building_mesh.vertices[:, 2] += (
+        base_thickness - lowest_z
+    )  # Correct for lowest Z of buildings
+
+    # Combine the base mesh and the buildings
+    combined_mesh = trimesh.util.concatenate([base_mesh, combined_building_mesh])
     # Export to STL
     combined_mesh.export(stl_path)
 

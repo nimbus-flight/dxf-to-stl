@@ -20,7 +20,7 @@ This Python script converts 2D DXF files (specifically from Cadmapper) into 3D S
 
 1. Clone this repository:
    ```bash
-   git clone [invalid URL removed]
+   git clone https://github.com/nimbus-flight/dxf-to-stl.git
    ```
 
 2. Install the required libraries:

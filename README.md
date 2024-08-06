@@ -48,6 +48,9 @@ This Python script converts 2D DXF files (specifically from Cadmapper) into 3D S
 * You can adjust the `max_dimension` variable in the code to control the maximum size of the final model.
 * You can modify the layer-based extrusion heights or add handling for other DXF entity types as needed. 
 
+## Further improvements
+This currently only imports buildings, if you want to add roads and other layers, you will need to add an entity.dxf.layer
+
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests.

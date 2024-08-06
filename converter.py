@@ -4,7 +4,7 @@ import numpy as np
 import shapely.geometry  # Import the shapely.geometry module
 
 
-def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0):
+def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=180.0):
     """
     Converts a DXF file to an extruded STL mesh for 3D printing.
     """
@@ -35,7 +35,8 @@ def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0):
             # Attempt to repair the combined mesh
             trimesh.repair.fix_winding(mesh)  # Fix winding order if needed
             trimesh.repair.fill_holes(mesh)   # Fill holes in the mesh 
- 
+            trimesh.repair.fix_normals(mesh) # Fix face normals
+
             building_meshes.append(mesh) # Append to building_meshes
 
         else:
@@ -53,28 +54,45 @@ def dxf_to_extruded_stl(dxf_path, stl_path, max_dimension=200.0):
 
     # Add the combined building mesh to the final meshes list
     meshes.append(combined_building_mesh) 
-   
+    
+    # Repair the combined building mesh to fix common issues
+    # 1. Fix normals and winding order
+    trimesh.repair.fix_normals(combined_building_mesh)
+    trimesh.repair.fix_winding(combined_building_mesh) 
+
+    # 2. Fill smaller holes (be careful as this can change the mesh shape)
+    combined_building_mesh.fill_holes()
+
+
     # Center the combined building mesh (in X and Y only) before creating the base
     combined_building_mesh.apply_translation(
         [-combined_building_mesh.centroid[0], -combined_building_mesh.centroid[1], 0]
     )
 
-    # Find the lowest Z value in the combined building mesh
-    lowest_z = combined_building_mesh.bounds[0][2]  # Get Z from lower corner of bounding box
 
     # Create the base layer mesh (centered at Z=0)
-    base_thickness = 2.0  # Adjust base thickness as needed
+    base_thickness = 4.0  # Adjust base thickness as needed
     base_mesh = trimesh.creation.box(
         extents=[max_dimension*1.2, max_dimension*1.2, base_thickness],
         center=[0, 0, 0],
     )
 
-    # Place the combined building mesh on top of the base layer (at Z=0)
-    combined_building_mesh.vertices[:, 2] += (
-        base_thickness - lowest_z
-    )  # Correct for lowest Z of buildings
+     # Lower the combined building mesh by a small amount
+    lowering_amount = -1.0  # Lower by 1.0mm
+    combined_building_mesh.vertices[:, 2] += lowering_amount  
 
-    # Combine the base mesh and the buildings
+
+    # Find the lowest Z value in the combined building mesh
+    #lowest_z = combined_building_mesh.bounds[0][2]  # Get Z from lower corner of bounding box
+    # Find the LOWEST point of the lowered building mesh
+    lowest_building_z = np.min(combined_building_mesh.vertices[:, 2]) 
+
+    # Create a boolean union of the base and buildings 
+    #boolean_result = base_mesh.union(combined_building_mesh)
+
+    # The boolean union should have resulted in a single mesh. Extract the mesh and fix normals.
+    #combined_mesh = boolean_result.result
+    #combined_mesh.fix_normals()
     combined_mesh = trimesh.util.concatenate([base_mesh, combined_building_mesh])
     # Export to STL
     combined_mesh.export(stl_path)

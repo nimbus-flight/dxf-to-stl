@@ -30,16 +30,15 @@ This Python script converts 2D DXF files (specifically from Cadmapper) into 3D S
 
 ## Usage
 
-1. Place your DXF file (e.g., `cadmapper-atlanta-georgia-us.dxf`) in the same directory as the script.
+1. Place your DXF file (e.g., `city_name.dxf`) in the same directory as the script.
 
 2. Run the script:
    ```bash
    python3 converter.py
    ```
 
-3. This will generate two STL files:
-   * `output_base.stl`: The base layer of the model.
-   * `output_buildings.stl`: The extruded buildings.
+3. This will generate an STL file:
+   * `output.stl`: The base layer of the model, plus the buildings above.
 
 4. Import these STL files into your 3D modeling or slicing software and position them as needed.
 
